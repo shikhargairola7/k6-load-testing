@@ -82,7 +82,7 @@ function buildUser(n) {
   };
 }
 
-const BASE_URL = env('BASE_URL', 'https://sandbox.api.vikexpress.com');
+const BASE_URL = env('BASE_URL', 'https://dev.api.vikexpress.com');
 const ENV_LABEL =
   env('ENV_LABEL', undefined) ||
   BASE_URL.replace(/^https?:\/\//, '').split(/[./:]/).filter(Boolean)[0] ||
