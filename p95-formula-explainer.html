@@ -1,0 +1,406 @@
+<title>The P95 Formula</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --paper: #F7F5F0;
+    --paper-raised: #FFFFFF;
+    --ink: #1B1F23;
+    --ink-soft: #3D434B;
+    --muted: #6B7280;
+    --line: #E4E0D6;
+    --accent: #106B6B;
+    --accent-soft: #DCEDEB;
+    --spike: #B54708;
+    --spike-soft: #FBE7D8;
+    --warn: #9A6B12;
+    --warn-soft: #FBF0D9;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper: #14171C;
+      --paper-raised: #1B1F26;
+      --ink: #EDEEF0;
+      --ink-soft: #C7CBD1;
+      --muted: #8B929B;
+      --line: #2A2F37;
+      --accent: #4FCFC8;
+      --accent-soft: rgba(79,207,200,0.16);
+      --spike: #FF8A50;
+      --spike-soft: rgba(255,138,80,0.14);
+      --warn: #E0B34D;
+      --warn-soft: rgba(224,179,77,0.14);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper: #14171C;
+    --paper-raised: #1B1F26;
+    --ink: #EDEEF0;
+    --ink-soft: #C7CBD1;
+    --muted: #8B929B;
+    --line: #2A2F37;
+    --accent: #4FCFC8;
+    --accent-soft: rgba(79,207,200,0.16);
+    --spike: #FF8A50;
+    --spike-soft: rgba(255,138,80,0.14);
+    --warn: #E0B34D;
+    --warn-soft: rgba(224,179,77,0.14);
+  }
+
+  *{ box-sizing: border-box; }
+  body{
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  }
+  .page{
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 56px 24px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  .eyebrow{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin: 0 0 14px;
+  }
+  h1{
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 40px;
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+    margin: 0 0 18px;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+  .lede{
+    font-size: 17px;
+    line-height: 1.65;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0;
+  }
+  .lede strong{ color: var(--ink); font-weight: 600; }
+
+  header{ border-bottom: 1px solid var(--line); padding-bottom: 36px; }
+
+  h2{
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 22px;
+    margin: 0 0 6px;
+    color: var(--ink);
+  }
+  .section-note{
+    font-size: 14.5px;
+    color: var(--muted);
+    margin: 0 0 20px;
+    max-width: 60ch;
+    line-height: 1.55;
+  }
+
+  /* ---- chart card ---- */
+  .card{
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 28px 26px 22px;
+  }
+  .chart-wrap{ width: 100%; overflow-x: auto; }
+  svg.chart{ width: 100%; height: auto; display: block; min-width: 560px; }
+  .axis-line{ stroke: var(--ink-soft); stroke-width: 1; }
+  .tick{ stroke: var(--ink-soft); stroke-width: 1; }
+  .tick-label{ font-family: 'IBM Plex Mono', monospace; font-size: 11px; fill: var(--muted); text-anchor: middle; }
+  .axis-title{ font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; fill: var(--muted); text-anchor: end; }
+
+  .dot-normal{ fill: var(--accent); fill-opacity: 0.55; }
+  .dot-warn{ fill: var(--warn); fill-opacity: 0.9; }
+  .dot-spike{ fill: var(--spike); fill-opacity: 0.9; }
+
+  .gap-band{ fill: var(--spike-soft); }
+  .gap-label{ font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; fill: var(--spike); font-weight: 500; }
+
+  .marker-minor{ stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+  .marker-minor-label{ font-family: 'IBM Plex Mono', monospace; font-size: 11px; fill: var(--muted); text-anchor: middle; }
+  .marker-p95{ stroke: var(--ink); stroke-width: 2; }
+  .marker-p95-label{ font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; fill: var(--ink); text-anchor: middle; }
+
+  .chart-caption{
+    font-size: 12.5px;
+    font-style: italic;
+    color: var(--muted);
+    margin: 4px 2px 18px;
+  }
+
+  .legend{ display: flex; flex-wrap: wrap; gap: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .legend-item{ display: flex; align-items: baseline; gap: 8px; font-size: 13.5px; color: var(--ink-soft); }
+  .swatch{ width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; transform: translateY(1px); }
+  .legend-item b{ color: var(--ink); font-weight: 600; }
+
+  /* ---- recipe ---- */
+  .recipe{ list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+  .recipe li{
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+    align-items: start;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+  }
+  .recipe .num{
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .recipe code{
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--accent-soft);
+    color: var(--ink);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 13.5px;
+  }
+
+  .formula-box{
+    margin-top: 22px;
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 8px;
+    padding: 20px 22px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14.5px;
+    line-height: 1.9;
+  }
+  .formula-box .comment{ color: var(--muted); }
+
+  /* ---- table ---- */
+  table{ width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  th, td{ text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  td.num, th.num{ font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; text-align: right; }
+  tr:last-child td{ border-bottom: none; font-weight: 600; color: var(--accent); }
+
+  /* ---- takeaway ---- */
+  .takeaway{
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 8px 8px 0;
+    padding: 22px 26px;
+  }
+  .takeaway .kicker{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin: 0 0 8px;
+  }
+  .takeaway p{ margin: 0 0 10px; font-size: 15.5px; line-height: 1.6; color: var(--ink); }
+  .takeaway p:last-child{ margin-bottom: 0; }
+
+  footer{
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+</style>
+
+<div class="page">
+
+  <header>
+    <p class="eyebrow">Preprod load test &middot; token API</p>
+    <h1>Where the 417ms number comes from</h1>
+    <p class="lede">
+      The report calls it <strong>p95</strong>. It isn't an average, and it isn't the worst
+      time recorded &mdash; it's the line between the fastest 95% of requests and the slowest 5%.
+      Below is exactly how that line lands on <strong>417&nbsp;ms</strong>, using the actual
+      60 token requests from this run.
+    </p>
+  </header>
+
+  <section>
+    <h2>60 requests, fastest to slowest</h2>
+    <p class="section-note">
+      Each dot is one real request. Position left-to-right is its response time in milliseconds;
+      vertical position is only spacing so dots don't sit on top of each other.
+    </p>
+    <div class="card">
+      <div class="chart-wrap">
+        <svg class="chart" viewBox="0 0 920 260" xmlns="http://www.w3.org/2000/svg">
+
+          <!-- gap band between the last "normal" point and the cold-start cluster -->
+          <rect class="gap-band" x="399.4" y="72" width="432.4" height="140" rx="4"></rect>
+          <text class="gap-label" x="410" y="64">p95 lands just inside this gap</text>
+
+          <!-- axis -->
+          <line class="axis-line" x1="40" y1="205" x2="880" y2="205"></line>
+          <line class="tick" x1="40" y1="201" x2="40" y2="209"></line>
+          <text class="tick-label" x="40" y="222">0</text>
+          <line class="tick" x1="222.6" y1="201" x2="222.6" y2="209"></line>
+          <text class="tick-label" x="222.6" y="222">200</text>
+          <line class="tick" x1="405.2" y1="201" x2="405.2" y2="209"></line>
+          <text class="tick-label" x="405.2" y="222">400</text>
+          <line class="tick" x1="587.8" y1="201" x2="587.8" y2="209"></line>
+          <text class="tick-label" x="587.8" y="222">600</text>
+          <line class="tick" x1="770.4" y1="201" x2="770.4" y2="209"></line>
+          <text class="tick-label" x="770.4" y="222">800</text>
+          <text class="axis-title" x="880" y="244">response time, ms</text>
+
+          <!-- dots: sorted token response times -->
+          <circle class="dot-normal" cx="117.8" cy="98.0" r="5.5"><title>85.20 ms (rank 1 of 60)</title></circle>
+          <circle class="dot-normal" cx="119.0" cy="106.0" r="5.5"><title>86.48 ms (rank 2 of 60)</title></circle>
+          <circle class="dot-normal" cx="120.3" cy="114.0" r="5.5"><title>88.00 ms (rank 3 of 60)</title></circle>
+          <circle class="dot-normal" cx="120.9" cy="122.0" r="5.5"><title>88.63 ms (rank 4 of 60)</title></circle>
+          <circle class="dot-normal" cx="121.7" cy="130.0" r="5.5"><title>89.49 ms (rank 5 of 60)</title></circle>
+          <circle class="dot-normal" cx="122.5" cy="138.0" r="5.5"><title>90.40 ms (rank 6 of 60)</title></circle>
+          <circle class="dot-normal" cx="124.1" cy="146.0" r="5.5"><title>92.06 ms (rank 7 of 60)</title></circle>
+          <circle class="dot-normal" cx="124.8" cy="154.0" r="5.5"><title>92.83 ms (rank 8 of 60)</title></circle>
+          <circle class="dot-normal" cx="124.9" cy="162.0" r="5.5"><title>92.97 ms (rank 9 of 60)</title></circle>
+          <circle class="dot-normal" cx="124.9" cy="98.0" r="5.5"><title>93.01 ms (rank 10 of 60)</title></circle>
+          <circle class="dot-normal" cx="126.9" cy="106.0" r="5.5"><title>95.23 ms (rank 11 of 60)</title></circle>
+          <circle class="dot-normal" cx="127.9" cy="114.0" r="5.5"><title>96.30 ms (rank 12 of 60)</title></circle>
+          <circle class="dot-normal" cx="129.5" cy="122.0" r="5.5"><title>98.05 ms (rank 13 of 60)</title></circle>
+          <circle class="dot-normal" cx="131.8" cy="130.0" r="5.5"><title>100.52 ms (rank 14 of 60)</title></circle>
+          <circle class="dot-normal" cx="132.1" cy="138.0" r="5.5"><title>100.91 ms (rank 15 of 60)</title></circle>
+          <circle class="dot-normal" cx="132.9" cy="146.0" r="5.5"><title>101.77 ms (rank 16 of 60)</title></circle>
+          <circle class="dot-normal" cx="133.8" cy="154.0" r="5.5"><title>102.76 ms (rank 17 of 60)</title></circle>
+          <circle class="dot-normal" cx="134.6" cy="162.0" r="5.5"><title>103.60 ms (rank 18 of 60)</title></circle>
+          <circle class="dot-normal" cx="134.7" cy="98.0" r="5.5"><title>103.75 ms (rank 19 of 60)</title></circle>
+          <circle class="dot-normal" cx="136.6" cy="106.0" r="5.5"><title>105.77 ms (rank 20 of 60)</title></circle>
+          <circle class="dot-normal" cx="137.3" cy="114.0" r="5.5"><title>106.59 ms (rank 21 of 60)</title></circle>
+          <circle class="dot-normal" cx="139.4" cy="122.0" r="5.5"><title>108.83 ms (rank 22 of 60)</title></circle>
+          <circle class="dot-normal" cx="139.7" cy="130.0" r="5.5"><title>109.17 ms (rank 23 of 60)</title></circle>
+          <circle class="dot-normal" cx="140.8" cy="138.0" r="5.5"><title>110.39 ms (rank 24 of 60)</title></circle>
+          <circle class="dot-normal" cx="140.8" cy="146.0" r="5.5"><title>110.41 ms (rank 25 of 60)</title></circle>
+          <circle class="dot-normal" cx="141.3" cy="154.0" r="5.5"><title>110.96 ms (rank 26 of 60)</title></circle>
+          <circle class="dot-normal" cx="141.5" cy="162.0" r="5.5"><title>111.19 ms (rank 27 of 60)</title></circle>
+          <circle class="dot-normal" cx="141.7" cy="98.0" r="5.5"><title>111.41 ms (rank 28 of 60)</title></circle>
+          <circle class="dot-normal" cx="141.8" cy="106.0" r="5.5"><title>111.53 ms (rank 29 of 60)</title></circle>
+          <circle class="dot-normal" cx="142.8" cy="114.0" r="5.5"><title>112.54 ms (rank 30 of 60)</title></circle>
+          <circle class="dot-normal" cx="142.8" cy="122.0" r="5.5"><title>112.55 ms (rank 31 of 60)</title></circle>
+          <circle class="dot-normal" cx="143.8" cy="130.0" r="5.5"><title>113.73 ms (rank 32 of 60)</title></circle>
+          <circle class="dot-normal" cx="144.0" cy="138.0" r="5.5"><title>113.90 ms (rank 33 of 60)</title></circle>
+          <circle class="dot-normal" cx="146.4" cy="146.0" r="5.5"><title>116.48 ms (rank 34 of 60)</title></circle>
+          <circle class="dot-normal" cx="148.5" cy="154.0" r="5.5"><title>118.85 ms (rank 35 of 60)</title></circle>
+          <circle class="dot-normal" cx="149.8" cy="162.0" r="5.5"><title>120.26 ms (rank 36 of 60)</title></circle>
+          <circle class="dot-normal" cx="151.2" cy="98.0" r="5.5"><title>121.76 ms (rank 37 of 60)</title></circle>
+          <circle class="dot-normal" cx="152.9" cy="106.0" r="5.5"><title>123.66 ms (rank 38 of 60)</title></circle>
+          <circle class="dot-normal" cx="153.6" cy="114.0" r="5.5"><title>124.39 ms (rank 39 of 60)</title></circle>
+          <circle class="dot-normal" cx="154.3" cy="122.0" r="5.5"><title>125.19 ms (rank 40 of 60)</title></circle>
+          <circle class="dot-normal" cx="154.3" cy="130.0" r="5.5"><title>125.19 ms (rank 41 of 60)</title></circle>
+          <circle class="dot-normal" cx="154.3" cy="138.0" r="5.5"><title>125.24 ms (rank 42 of 60)</title></circle>
+          <circle class="dot-normal" cx="155.7" cy="146.0" r="5.5"><title>126.74 ms (rank 43 of 60)</title></circle>
+          <circle class="dot-normal" cx="157.3" cy="154.0" r="5.5"><title>128.43 ms (rank 44 of 60)</title></circle>
+          <circle class="dot-normal" cx="158.2" cy="162.0" r="5.5"><title>129.50 ms (rank 45 of 60)</title></circle>
+          <circle class="dot-normal" cx="163.0" cy="98.0" r="5.5"><title>134.72 ms (rank 46 of 60)</title></circle>
+          <circle class="dot-normal" cx="170.1" cy="106.0" r="5.5"><title>142.48 ms (rank 47 of 60)</title></circle>
+          <circle class="dot-normal" cx="174.2" cy="114.0" r="5.5"><title>146.96 ms (rank 48 of 60)</title></circle>
+          <circle class="dot-normal" cx="177.5" cy="122.0" r="5.5"><title>150.60 ms (rank 49 of 60)</title></circle>
+          <circle class="dot-normal" cx="179.1" cy="130.0" r="5.5"><title>152.37 ms (rank 50 of 60)</title></circle>
+          <circle class="dot-normal" cx="190.3" cy="138.0" r="5.5"><title>164.65 ms (rank 51 of 60)</title></circle>
+          <circle class="dot-normal" cx="202.0" cy="146.0" r="5.5"><title>177.46 ms (rank 52 of 60)</title></circle>
+          <circle class="dot-normal" cx="208.2" cy="154.0" r="5.5"><title>184.17 ms (rank 53 of 60)</title></circle>
+          <circle class="dot-normal" cx="211.0" cy="162.0" r="5.5"><title>187.29 ms (rank 54 of 60)</title></circle>
+          <circle class="dot-normal" cx="270.3" cy="98.0" r="5.5"><title>252.20 ms (rank 55 of 60)</title></circle>
+          <circle class="dot-normal" cx="284.1" cy="106.0" r="5.5"><title>267.35 ms (rank 56 of 60)</title></circle>
+          <circle class="dot-warn" cx="399.4" cy="114.0" r="5.5"><title>393.60 ms (rank 57 of 60) &mdash; slowest "normal" request</title></circle>
+          <circle class="dot-spike" cx="831.8" cy="122.0" r="5.5"><title>867.16 ms (rank 58 of 60) &mdash; VU1 first request (cold connection)</title></circle>
+          <circle class="dot-spike" cx="840.5" cy="130.0" r="5.5"><title>876.78 ms (rank 59 of 60) &mdash; VU2 first request (cold connection)</title></circle>
+          <circle class="dot-spike" cx="847.0" cy="138.0" r="5.5"><title>883.86 ms (rank 60 of 60) &mdash; VU3 first request (cold connection)</title></circle>
+
+          <!-- minor markers -->
+          <line class="marker-minor" x1="142.8" y1="188" x2="142.8" y2="205"></line>
+          <text class="marker-minor-label" x="142.8" y="184">p50</text>
+          <line class="marker-minor" x1="216.9" y1="188" x2="216.9" y2="205"></line>
+          <text class="marker-minor-label" x="216.9" y="184">p90</text>
+
+          <!-- p95 marker -->
+          <line class="marker-p95" x1="421.0" y1="40" x2="421.0" y2="205"></line>
+          <text class="marker-p95-label" x="421.0" y="30">p95 = 417 ms</text>
+        </svg>
+      </div>
+      <p class="chart-caption">Hover any dot to see its exact time. The 3 orange dots are each simulated user's very first request of the run.</p>
+      <div class="legend">
+        <span class="legend-item"><span class="swatch" style="background:var(--accent)"></span><b>56</b>&nbsp;normal requests &mdash; 85&ndash;267&nbsp;ms</span>
+        <span class="legend-item"><span class="swatch" style="background:var(--warn)"></span><b>1</b>&nbsp;slower request &mdash; 393.6&nbsp;ms</span>
+        <span class="legend-item"><span class="swatch" style="background:var(--spike)"></span><b>3</b>&nbsp;cold-start requests &mdash; 867&ndash;884&nbsp;ms</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How the formula reaches 417&nbsp;ms</h2>
+    <p class="section-note">Three mechanical steps &mdash; no judgment calls, no averaging.</p>
+    <ol class="recipe">
+      <li><span class="num">1</span><span>Sort all <code>60</code> token response times from fastest to slowest.</span></li>
+      <li><span class="num">2</span><span>Walk 95% of the way down that sorted list: <code>0.95 &times; (60 &minus; 1) = 56.05</code>.</span></li>
+      <li><span class="num">3</span><span>Position <code>56.05</code> falls between the 57th and 58th fastest times &mdash; so the answer is 5% of the way from one to the other.</span></li>
+    </ol>
+    <div class="formula-box">
+<div><span class="comment">// generic form</span></div>
+<div>rank&nbsp;&nbsp;= (p &divide; 100) &times; (n &minus; 1)</div>
+<div>p95&nbsp;&nbsp;&nbsp;= v[low] + frac &times; (v[high] &minus; v[low])</div>
+<div>&nbsp;</div>
+<div><span class="comment">// this run's token data</span></div>
+<div>rank&nbsp;&nbsp;= 0.95 &times; (60 &minus; 1) = 56.05</div>
+<div>p95&nbsp;&nbsp;&nbsp;= 393.60 + 0.05 &times; (867.16 &minus; 393.60) = <strong>417.28 ms</strong></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The five numbers behind it</h2>
+    <div class="card" style="padding:6px 26px 4px;">
+      <table>
+        <thead>
+          <tr><th>Symbol</th><th>What it is</th><th class="num">Value</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>n</td><td>Token requests measured this run</td><td class="num">60</td></tr>
+          <tr><td>rank</td><td>Position 95% of the way down the sorted list</td><td class="num">56.05</td></tr>
+          <tr><td>v[low]</td><td>57th-fastest request</td><td class="num">393.60 ms</td></tr>
+          <tr><td>v[high]</td><td>58th-fastest request (1st cold-start)</td><td class="num">867.16 ms</td></tr>
+          <tr><td>frac</td><td>How far between the two to interpolate</td><td class="num">0.05</td></tr>
+          <tr><td>p95</td><td>Reported result</td><td class="num">417.28 ms</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="takeaway">
+      <p class="kicker">For the room</p>
+      <p><strong>p95 = 417&nbsp;ms is not a defect, and it isn't the "typical" response time either</strong> &mdash; it's the boundary between the fastest 95% of requests and the slowest 5%.</p>
+      <p>In this run, that boundary happens to sit right next to one unusually slow request (393.6&nbsp;ms), nudged up slightly because the very next three requests are each a simulated user's <em>first</em> call &mdash; paying a one-time cost to open a new connection (867&ndash;884&nbsp;ms). That's a sample-size effect from only 60 requests, not a fault in the test tool.</p>
+      <p>The math itself is the same formula behind Excel's <code style="font-family:'IBM Plex Mono',monospace;background:var(--paper-raised);padding:1px 6px;border-radius:4px;">PERCENTILE.INC</code> &mdash; an industry-standard way of describing "typical worst-case" experience, used the same way by every APM and monitoring vendor.</p>
+    </div>
+  </section>
+
+  <footer>
+    Source: requests-3u-20c-2026-09-11T11-28-32.csv &middot; metric: token_latency &middot; n = 60 &middot; environment: preprod
+  </footer>
+
+</div>
