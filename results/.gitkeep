@@ -1,0 +1,1 @@
+# keeps results/ in the repo; k6 writes summary-*.json here and does not create the dir itself

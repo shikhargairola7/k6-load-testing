@@ -1,0 +1,12 @@
+# Secrets / local config
+.env
+.env.*
+!.env.example
+
+# Test output (keep the dir, ignore the reports)
+results/*
+!results/.gitkeep
+*.log
+
+# Node (only if you install the optional dev deps)
+node_modules/

@@ -1,0 +1,14 @@
+{
+  "name": "vikexpress-load-test",
+  "version": "1.0.0",
+  "private": true,
+  "description": "k6 load test for the vikexpress token -> routing-number query cycle",
+  "scripts": {
+    "test": "k6 run load-test.js",
+    "inspect": "k6 inspect load-test.js",
+    "smoke": "k6 run -e USERS=1 -e CYCLES_PER_USER=2 load-test.js"
+  },
+  "devDependencies": {
+    "@types/k6": "^1.0.0"
+  }
+}
