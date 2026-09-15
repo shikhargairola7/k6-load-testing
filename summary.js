@@ -10,6 +10,15 @@
 // cycle-level view the test is about.
 // -----------------------------------------------------------------------------
 
+// cycle_latency = cycleEnd - cycleStart (see load-test.js header comment). It
+// covers the token call + query call + whatever JS runs between them (checks,
+// token extraction, etc.), so it's not a pure network/server number the way
+// token_latency and query_latency are. Called out explicitly in both the
+// stdout summary and the report CSV so it isn't mistaken for pure server RTT.
+const CYCLE_LATENCY_NOTE =
+  'cycle_latency includes client-side JS work between the token and query calls ' +
+  '(checks, token extraction, etc.), not pure network/server latency — see token_latency / query_latency for that.';
+
 function n2(x) {
   return x === undefined || x === null || Number.isNaN(x) ? 'n/a' : Number(x).toFixed(2);
 }
@@ -62,11 +71,24 @@ function statusDistribution(data) {
   return rows;
 }
 
+function tokenFailureBreakdown(data) {
+  const rows = [];
+  for (const key of Object.keys(data.metrics)) {
+    const m = key.match(/^token_failure_reason\{reason:([^}]+)\}$/);
+    if (!m) continue;
+    const c = count(data, key);
+    if (c > 0) rows.push({ reason: m[1], count: c });
+  }
+  rows.sort((a, b) => b.count - a.count);
+  return rows;
+}
+
 function thresholdResults(data) {
   const out = [];
   for (const [name, m] of Object.entries(data.metrics)) {
     if (!m.thresholds) continue;
-    if (name.startsWith('http_status')) continue; // internal no-op submetrics, not user-facing
+    // internal no-op submetrics, not user-facing
+    if (name.startsWith('http_status') || name.startsWith('token_failure_reason')) continue;
     for (const [expr, res] of Object.entries(m.thresholds)) {
       out.push({ metric: name, threshold: expr, ok: !!res.ok });
     }
@@ -91,6 +113,7 @@ export function buildSummary(data, config) {
   const cycle = trendStats(data, 'cycle_latency');
 
   const statuses = statusDistribution(data);
+  const tokenFailures = tokenFailureBreakdown(data);
   const thresholds = thresholdResults(data);
   const failed = thresholds.filter((t) => !t.ok);
 
@@ -119,6 +142,7 @@ export function buildSummary(data, config) {
     },
     latencyMs: { token, query, cycle },
     httpStatusDistribution: statuses,
+    tokenFailureReasons: tokenFailures,
     thresholds,
   };
 
@@ -137,6 +161,11 @@ export function buildSummary(data, config) {
   L.push(`    failed      ${cyclesFailed}   (token errors: ${tokenErr}, query errors: ${queryErr})`);
   L.push(`    cycles/sec  ${n2(rate(data, 'cycles_total'))}`);
   L.push('');
+  if (tokenFailures.length) {
+    L.push('  Token failure reasons');
+    for (const f of tokenFailures) L.push(`    ${f.reason.padEnd(16)} ${f.count}`);
+    L.push('');
+  }
   L.push('  HTTP');
   L.push(`    requests    ${httpReqs}`);
   L.push(`    req/sec     ${n2(rate(data, 'http_reqs'))}`);
@@ -146,6 +175,7 @@ export function buildSummary(data, config) {
   L.push(trendLine('token API', token));
   L.push(trendLine('query API', query));
   L.push(trendLine('full cycle', cycle));
+  L.push(`    note: ${CYCLE_LATENCY_NOTE}`);
   L.push('');
   if (statuses.length) {
     L.push('  HTTP status distribution');
@@ -259,11 +289,17 @@ function buildReportCsv(report) {
         : csvRow([stage, '', '', '', '', '', '', ''])
     );
   }
+  rows.push(csvRow(['note', CYCLE_LATENCY_NOTE]));
   rows.push('');
 
   rows.push('# HTTP STATUS');
   rows.push(csvRow(['api', 'status', 'count']));
   for (const s of report.httpStatusDistribution) rows.push(csvRow([s.api, s.status, s.count]));
+  rows.push('');
+
+  rows.push('# TOKEN FAILURE REASONS');
+  rows.push(csvRow(['reason', 'count']));
+  for (const f of report.tokenFailureReasons) rows.push(csvRow([f.reason, f.count]));
   rows.push('');
 
   rows.push('# THRESHOLDS');

@@ -23,7 +23,7 @@ import exec from 'k6/execution';
 import { check, sleep } from 'k6';
 
 import { config, userForVU } from './config.js';
-import { generateToken } from './lib/token.js';
+import { generateToken, TOKEN_FAILURE_REASONS, TOKEN_FAILURE_MESSAGES } from './lib/token.js';
 import { routingNumberQuery } from './lib/query.js';
 import { parseRoutingPool, pickRoutingNumber } from './lib/routingNumbers.js';
 import {
@@ -36,6 +36,7 @@ import {
   tokenErrors,
   queryErrors,
   httpStatus,
+  tokenFailureReason,
   cycleErrorRate,
 } from './lib/metrics.js';
 import { buildSummary } from './summary.js';
@@ -63,6 +64,13 @@ for (const api of ['token', 'query']) {
   }
 }
 
+// Same trick, for a WHY-did-the-token-step-fail breakdown (connection_error /
+// bad_status / empty_body / token_not_found).
+const tokenFailureThresholds = {};
+for (const reason of TOKEN_FAILURE_REASONS) {
+  tokenFailureThresholds[`token_failure_reason{reason:${reason}}`] = ['count>=0'];
+}
+
 export const options = {
   scenarios: {
     cycle: {
@@ -82,6 +90,7 @@ export const options = {
     query_latency: [`p(95)<${config.thresholds.queryP95}`],
     cycle_error_rate: [`rate<${config.thresholds.errorRate}`],
     ...statusThresholds,
+    ...tokenFailureThresholds,
   },
 };
 
@@ -138,7 +147,7 @@ export default function () {
   let token = config.tokenReuse ? cachedToken : null;
 
   if (!token) {
-    const { res, token: fresh, request } = generateToken(user);
+    const { res, token: fresh, request, failureReason } = generateToken(user);
     httpStatus.add(1, { api: 'token', status: String(res.status) });
     // Only record latency when an HTTP response actually came back. status 0 =
     // connection-level failure (refused / DNS / TLS) with a ~0ms duration that
@@ -146,13 +155,20 @@ export default function () {
     // failures below.
     if (res.status > 0) tokenLatency.add(res.timings.duration);
 
-    const tokenOk = check(res, {
+    check(res, {
       'token: status is 2xx': (r) => r.status >= 200 && r.status < 300,
       'token: body is present': (r) => !!r.body && r.body.length > 0,
       'token: access token present': () => fresh !== undefined,
       'token: access token non-empty': () => typeof fresh === 'string' && fresh.length > 0,
     });
-    const tokenPassed = tokenOk && !!fresh;
+    const tokenPassed = !failureReason;
+
+    const messageEntry = failureReason && TOKEN_FAILURE_MESSAGES[failureReason];
+    const errorMessage = tokenPassed
+      ? ''
+      : typeof messageEntry === 'function'
+        ? messageEntry(res.status, config.tokenJsonPath)
+        : messageEntry || `token step failed (http ${res.status})`;
 
     tokenRow = {
       index: cycleIndex,
@@ -165,7 +181,7 @@ export default function () {
       ok: tokenPassed,
       responseTimeMs: res.status > 0 ? res.timings.duration : undefined,
       timestamp: new Date().toISOString(),
-      errorMessage: tokenPassed ? '' : `token step failed (http ${res.status})`,
+      errorMessage,
       // never log the access token; on error the body is an error object (safe)
       responseBody:
         res.status >= 200 && res.status < 300 ? '<2xx: access_token redacted>' : res.body || '',
@@ -173,10 +189,11 @@ export default function () {
 
     if (!tokenPassed) {
       tokenErrors.add(1);
+      tokenFailureReason.add(1, { reason: failureReason });
       cyclesFailed.add(1);
       cyclesTotal.add(1);
       cycleErrorRate.add(true);
-      console.warn(`[user ${user.index}] cycle ${cycleIndex} failed at TOKEN step (http ${res.status})`);
+      console.warn(`[user ${user.index}] cycle ${cycleIndex} failed at TOKEN step (${failureReason}, http ${res.status})`);
       logRequest(tokenRow);
       maybeSleep();
       return; // never call the query API with an invalid token
