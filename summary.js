@@ -17,7 +17,7 @@
 // stdout summary and the report CSV so it isn't mistaken for pure server RTT.
 const CYCLE_LATENCY_NOTE =
   'cycle_latency includes client-side JS work between the token and query calls ' +
-  '(checks, token extraction, etc.), not pure network/server latency — see token_latency / query_latency for that.';
+  '(checks, token extraction, etc.), not pure network/server latency, see token_latency / query_latency for that.';
 
 function n2(x) {
   return x === undefined || x === null || Number.isNaN(x) ? 'n/a' : Number(x).toFixed(2);
